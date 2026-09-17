@@ -19,10 +19,8 @@ import json
 
 import streamlit.components.v1 as components
 
-THREE_JS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
-ORBIT_CONTROLS_CDN = (
-    "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"
-)
+THREE_JS_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"
+ORBIT_CONTROLS_CDN = "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"
 
 
 def render_tree(
