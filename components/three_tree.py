@@ -55,11 +55,14 @@ def render_tree(
         shield_active=shield_active,
         pest_mode=pest_mode,
         pest_count=pest_count,
+        key=key,
     )
     components.html(html, height=height, scrolling=False)
 
 
-def _build_html(level: int, stage: str, shield_active: bool, pest_mode: bool, pest_count: int) -> str:
+def _build_html(
+    level: int, stage: str, shield_active: bool, pest_mode: bool, pest_count: int, key: str
+) -> str:
     config = {
         "level": level,
         "stage": stage,
