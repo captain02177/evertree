@@ -4,14 +4,13 @@ components/three_tree.py
 Python wrapper that returns the HTML/JS payload for the hyper-realistic
 3D tree, rendered inside Streamlit via `streamlit.components.v1.html`.
 
-Visual approach (photoreal broadleaf/oak tree, realistic outdoor scene):
-    - Recursive branch generator (2-3 levels) built from tapered, textured
-      cylinder segments -> an organic, spreading oak-like silhouette instead
-      of a simple cone.
-    - Dense instanced-leaf canopy: hundreds of small "leaf clump" billboards
-      (each a canvas-drawn cluster of several leaf blades) scattered through
-      an ellipsoid volume around the branch tips via THREE.InstancedMesh,
-      biased toward the outer shell for a full, fluffy silhouette.
+Visual approach (Chinese pine / classical Chinese landscape tree):
+    - Recursive branch generator inspired by Chinese pine (Pinus tabuliformis /
+      traditional ink-painting pine): tall, slightly twisted trunk with
+      strong horizontal/whorled tiered branches instead of a spreading oak.
+    - Needle-cluster foliage: billboards of fan-like needle clumps placed in
+      flat layered "pads" at branch tips (classic Chinese painting silhouette)
+      via THREE.InstancedMesh.
     - Gradient sky dome + warm directional "sun" light with shadows +
       hemisphere fill light, matched fog for atmospheric depth.
     - Grass-textured ground plane plus hundreds of instanced grass blades.
@@ -23,7 +22,7 @@ Visual approach (photoreal broadleaf/oak tree, realistic outdoor scene):
 
 Growth stages (see database.stage_for_level) still drive color/detail:
     seed -> sprout -> golden_pink -> ecosystem -> fairytale
-but all stages now share the same realistic branch+leaf-instancing technique,
+but all stages now share the same Chinese-pine branch + needle-pad technique,
 just with different bark/leaf palettes and stage extras (grass density,
 wildlife, cottage).
 """
@@ -321,7 +320,7 @@ const barkTex = buildBarkTexture();
 const barkMat = new THREE.MeshStandardMaterial({{ map: barkTex, roughness: 0.95, metalness: 0.02 }});
 
 // --------------------------------------------------------------------- //
-// Leaf-clump texture (several overlapping leaf blades per sprite/instance)
+// Needle-cluster texture (fan / star of thin needles — Chinese pine style)
 // --------------------------------------------------------------------- //
 function buildLeafClumpTexture() {{
   const c = document.createElement('canvas');
@@ -329,26 +328,27 @@ function buildLeafClumpTexture() {{
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, 128, 128);
   const colors = P.leaf;
-  for (let i = 0; i < 9; i++) {{
-    const cx = 30 + Math.random() * 68;
-    const cy = 30 + Math.random() * 68;
-    const len = 22 + Math.random() * 20;
-    const wid = 10 + Math.random() * 8;
-    const ang = Math.random() * Math.PI * 2;
+  // Draw several overlapping needle fans for a soft pine-pad look
+  for (let cluster = 0; cluster < 5; cluster++) {{
+    const cx = 40 + Math.random() * 48;
+    const cy = 40 + Math.random() * 48;
+    const baseAng = Math.random() * Math.PI * 2;
+    const needles = 11 + Math.floor(Math.random() * 7);
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(ang);
-    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-    ctx.globalAlpha = 0.85 + Math.random() * 0.15;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, len / 2, wid / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-len / 2, 0);
-    ctx.lineTo(len / 2, 0);
-    ctx.stroke();
+    ctx.rotate(baseAng);
+    for (let n = 0; n < needles; n++) {{
+      const a = (n / needles - 0.5) * 1.6 + (Math.random() - 0.5) * 0.15;
+      const len = 28 + Math.random() * 22;
+      ctx.strokeStyle = colors[Math.floor(Math.random() * colors.length)];
+      ctx.globalAlpha = 0.75 + Math.random() * 0.25;
+      ctx.lineWidth = 1.2 + Math.random() * 1.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.sin(a) * len, -Math.cos(a) * len);
+      ctx.stroke();
+    }}
     ctx.restore();
   }}
   ctx.globalAlpha = 1;
@@ -358,7 +358,8 @@ function buildLeafClumpTexture() {{
 const leafTex = buildLeafClumpTexture();
 
 // --------------------------------------------------------------------- //
-// Recursive branch builder -> organic, spreading oak-like silhouette
+// Recursive branch builder -> Chinese pine / classical layered silhouette
+// Tall trunk + strong horizontal / slightly drooping tiered branches
 // --------------------------------------------------------------------- //
 const treeGroup = new THREE.Group();
 scene.add(treeGroup);
@@ -379,11 +380,11 @@ function addBranchSegment(origin, direction, length, radiusStart, radiusEnd) {{
 }}
 
 function growBranch(origin, direction, length, radius, depth, maxDepth) {{
-  if (length < 0.15 || radius < 0.01) {{
+  if (length < 0.12 || radius < 0.008) {{
     branchTips.push(origin.clone());
     return;
   }}
-  const radiusEnd = radius * 0.62;
+  const radiusEnd = radius * (depth === 0 ? 0.72 : 0.58);
   const tip = addBranchSegment(origin, direction, length, radius, radiusEnd);
 
   if (depth >= maxDepth) {{
@@ -391,61 +392,113 @@ function growBranch(origin, direction, length, radius, depth, maxDepth) {{
     return;
   }}
 
-  const children = depth === 0 ? 3 : (2 + Math.floor(Math.random() * 2));
+  // Chinese pine style: fewer, more horizontal / layered branches
+  // Trunk (depth 0) sprouts several strong side tiers; upper levels fan out
+  const children = depth === 0 ? (4 + Math.floor(Math.random() * 2)) : (2 + Math.floor(Math.random() * 2));
   for (let i = 0; i < children; i++) {{
-    const spread = 0.55 + Math.random() * 0.5;
-    const axis = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.3, Math.random() - 0.5).normalize();
-    const childDir = direction.clone().applyAxisAngle(axis, spread).normalize();
-    childDir.y = Math.max(childDir.y, 0.15);
-    childDir.normalize();
-    const childLength = length * (0.62 + Math.random() * 0.16);
-    const childRadius = radiusEnd * (0.75 + Math.random() * 0.2);
+    let childDir, childLength, childRadius;
+    if (depth === 0) {{
+      // First-level branches: strong horizontal tiers around the upper trunk
+      const elev = 0.15 + Math.random() * 0.35;          // mostly horizontal
+      const azim = (i / children) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      childDir = new THREE.Vector3(
+        Math.cos(azim) * Math.cos(elev),
+        Math.sin(elev) + 0.05,
+        Math.sin(azim) * Math.cos(elev)
+      ).normalize();
+      // slight upward or gentle droop for classic pine look
+      if (Math.random() > 0.55) childDir.y -= 0.18;
+      childDir.normalize();
+      childLength = length * (0.45 + Math.random() * 0.28);
+      childRadius = radiusEnd * (0.55 + Math.random() * 0.25);
+    }} else {{
+      // Secondary / tertiary: continue outward with moderate spread, keep flat
+      const spread = 0.35 + Math.random() * 0.45;
+      const axis = new THREE.Vector3(Math.random() - 0.5, 0.15 + Math.random() * 0.4, Math.random() - 0.5).normalize();
+      childDir = direction.clone().applyAxisAngle(axis, spread).normalize();
+      // bias toward horizontal pads
+      childDir.y = Math.max(-0.25, Math.min(0.45, childDir.y * 0.7));
+      childDir.normalize();
+      childLength = length * (0.55 + Math.random() * 0.22);
+      childRadius = radiusEnd * (0.65 + Math.random() * 0.2);
+    }}
     growBranch(tip, childDir, childLength, childRadius, depth + 1, maxDepth);
   }}
 }}
 
 function buildTree(level) {{
-  const scale = CONFIG.stage === 'seed' ? 0.18 : Math.min(1.7, 0.75 + level * 0.025);
-  const trunkHeight = 3.4 * scale;
-  const trunkRadius = 0.42 * scale;
+  const scale = CONFIG.stage === 'seed' ? 0.18 : Math.min(1.85, 0.78 + level * 0.028);
+  // Chinese pine: taller, more slender trunk
+  const trunkHeight = 4.1 * scale;
+  const trunkRadius = 0.32 * scale;
   const maxDepth = CONFIG.stage === 'seed' ? 1 : 3;
-  growBranch(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0), trunkHeight, trunkRadius, 0, maxDepth);
+  // Slight initial lean / twist for character (classic Chinese pine)
+  const trunkDir = new THREE.Vector3(
+    (Math.random() - 0.5) * 0.12,
+    1,
+    (Math.random() - 0.5) * 0.12
+  ).normalize();
+  growBranch(new THREE.Vector3(0, 0, 0), trunkDir, trunkHeight, trunkRadius, 0, maxDepth);
   return {{ scale, trunkHeight }};
 }}
 const treeInfo = buildTree(CONFIG.level);
 
 // --------------------------------------------------------------------- //
-// Instanced leaf canopy — scattered through an ellipsoid around the tips
+// Instanced needle-pad canopy — layered flat pads at branch tips
+// (classic Chinese pine / landscape painting silhouette)
 // --------------------------------------------------------------------- //
 function buildCanopy(tips, scale) {{
   if (CONFIG.stage === 'seed' || tips.length === 0) return null;
 
-  let cx = 0, cy = 0, cz = 0, maxY = 0;
-  tips.forEach(p => {{ cx += p.x; cy += p.y; cz += p.z; maxY = Math.max(maxY, p.y); }});
-  cx /= tips.length; cy /= tips.length; cz /= tips.length;
-  const center = new THREE.Vector3(cx, cy * 0.55 + maxY * 0.45, cz);
-  const radius = Math.max(2.2 * scale, maxY * 0.55);
-
-  const leafPlaneGeo = new THREE.PlaneGeometry(1.6, 1.6);
-  const leafMat = new THREE.MeshStandardMaterial({{
-    map: leafTex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.85,
+  let cx = 0, cy = 0, cz = 0, maxY = 0, minY = Infinity;
+  tips.forEach(p => {{
+    cx += p.x; cy += p.y; cz += p.z;
+    maxY = Math.max(maxY, p.y);
+    minY = Math.min(minY, p.y);
   }});
-  const count = Math.min(520, 160 + Math.floor(scale * 220));
+  cx /= tips.length; cy /= tips.length; cz /= tips.length;
+  const center = new THREE.Vector3(cx, (cy + maxY) * 0.5, cz);
+  const radius = Math.max(2.4 * scale, maxY * 0.48);
+
+  const leafPlaneGeo = new THREE.PlaneGeometry(1.8, 1.8);
+  const leafMat = new THREE.MeshStandardMaterial({{
+    map: leafTex, transparent: true, alphaTest: 0.28, side: THREE.DoubleSide, roughness: 0.9,
+  }});
+  // More instances for dense needle pads
+  const count = Math.min(680, 200 + Math.floor(scale * 280));
   const inst = new THREE.InstancedMesh(leafPlaneGeo, leafMat, count);
   const dummy = new THREE.Object3D();
 
+  // Place majority of needles near actual branch tips in flattened layers
   for (let i = 0; i < count; i++) {{
-    const u = Math.random(), v = Math.random(), w = Math.random();
-    const rr = radius * (0.55 + 0.45 * Math.cbrt(Math.max(u, v, w)));
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    const px = center.x + rr * Math.sin(phi) * Math.cos(theta);
-    const py = center.y + rr * Math.cos(phi) * 0.85;
-    const pz = center.z + rr * Math.sin(phi) * Math.sin(theta);
-    dummy.position.set(px, Math.max(py, treeInfo.trunkHeight * 0.5), pz);
-    dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-    const s = 0.8 + Math.random() * 0.9;
-    dummy.scale.set(s, s, s);
+    let px, py, pz;
+    if (i < count * 0.72 && tips.length > 0) {{
+      // Cluster around a random tip (pad effect)
+      const tip = tips[Math.floor(Math.random() * tips.length)];
+      const spread = 0.35 + Math.random() * 0.95 * scale;
+      const theta = Math.random() * Math.PI * 2;
+      const flat = 0.25 + Math.random() * 0.55; // keep pads relatively flat
+      px = tip.x + Math.cos(theta) * spread;
+      pz = tip.z + Math.sin(theta) * spread;
+      py = tip.y + (Math.random() - 0.4) * spread * flat;
+    }} else {{
+      // Soft outer shell for silhouette fullness
+      const rr = radius * (0.4 + 0.6 * Math.random());
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1) * 0.7; // flatter distribution
+      px = center.x + rr * Math.sin(phi) * Math.cos(theta);
+      py = center.y + rr * Math.cos(phi) * 0.55;
+      pz = center.z + rr * Math.sin(phi) * Math.sin(theta);
+    }}
+    dummy.position.set(px, Math.max(py, treeInfo.trunkHeight * 0.35), pz);
+    // Prefer mostly horizontal orientation for needle pads
+    dummy.rotation.set(
+      (Math.random() - 0.5) * 0.9,
+      Math.random() * Math.PI * 2,
+      (Math.random() - 0.5) * 0.7
+    );
+    const s = 0.55 + Math.random() * 0.85;
+    dummy.scale.set(s, s * (0.7 + Math.random() * 0.5), s);
     dummy.updateMatrix();
     inst.setMatrixAt(i, dummy.matrix);
   }}
